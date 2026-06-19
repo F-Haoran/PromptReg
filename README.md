@@ -34,6 +34,18 @@ For a tar archive:
 python prepare_dataset_csv.py /path/to/dataset.tar.gz --extract-to /path/to/dataset --overwrite
 ```
 
+If your Brain dataset folder contains multiple tar archives, extract all of them into the same folder first:
+
+```
+python3 extract_brain_tars.py
+```
+
+This defaults to `/home/frankfei/PromptReg/Dataset/Brain`. To use another folder:
+
+```
+python3 extract_brain_tars.py --folder /path/to/Brain
+```
+
 The script first looks for task folders such as `Abdominal`, `Brain`, `Cardiac`, `Hippocampus`, and `Hip`.
 If those names are not present, it can infer task folders from any immediate subdirectory that contains
 NIfTI-like volumes. It treats paths containing words such as `label`, `seg`, `mask`, or `gt` as labels,
