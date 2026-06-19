@@ -181,6 +181,9 @@ def parse_args():
                       help='Initial learning rate')
     parser.add_argument('--seed', type=int, default=42,
                       help='Random seed for reproducibility')
+    parser.add_argument('--target-size', type=int, nargs=3, default=(160, 160, 160),
+                      metavar=('H', 'W', 'D'),
+                      help='Resampled volume size used for training')
     return parser.parse_args()
 def main():
 
@@ -193,7 +196,7 @@ def main():
     
   
     data_root = '/path/to/dataset'
-    target_size = (160, 160, 160)
+    target_size = tuple(args.target_size)
     batch_size = args.batch_size
     num_epochs = args.epochs
     initial_lr = args.lr
