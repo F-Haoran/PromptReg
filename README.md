@@ -22,6 +22,27 @@ Set `data_root` in `train.py`. Each task folder needs `csv/train.csv` and `csv/t
 - `moving_image`, `moving_label`
 - `fixed_image`, `fixed_label`
 
+You can generate these CSV files from an extracted dataset folder or a tar archive:
+
+```
+python prepare_dataset_csv.py /path/to/dataset --overwrite
+```
+
+For a tar archive:
+
+```
+python prepare_dataset_csv.py /path/to/dataset.tar.gz --extract-to /path/to/dataset --overwrite
+```
+
+The script expects task folders such as `Abdominal`, `Brain`, `Cardiac`, `Hippocampus`, and `Hip`.
+It scans NIfTI-like volumes, treats paths containing words such as `label`, `seg`, `mask`, or `gt` as labels,
+matches each image/label case by filename stem, and writes relative paths into each task's CSV files.
+If your filenames use a special subject ID pattern, pass `--subject-regex`, for example:
+
+```
+python prepare_dataset_csv.py /path/to/dataset --subject-regex "case_([0-9]+)" --overwrite
+```
+
 ## 🏋️ Training
 1) Edit `train.py` to set:
 - `data_root`: dataset root directory
