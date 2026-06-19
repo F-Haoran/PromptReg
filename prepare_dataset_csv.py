@@ -375,6 +375,36 @@ def existing_task_dirs(data_root: Path, task_names: Iterable[str]) -> List[Tuple
     return tasks
 
 
+def contains_volume_files(path: Path) -> bool:
+    return any(candidate.is_file() and volume_suffix(candidate) is not None for candidate in path.rglob("*"))
+
+
+def is_role_container_dir(path: Path) -> bool:
+    tokens = split_tokens(path.name)
+    return bool(tokens) and all(token in ALL_ROLE_MARKERS for token in tokens)
+
+
+def inferred_task_dirs(data_root: Path) -> List[Tuple[str, Path]]:
+    child_dirs = [
+        child_dir
+        for child_dir in sorted(data_root.iterdir())
+        if child_dir.is_dir() and child_dir.name != "csv"
+    ]
+    task_dirs = [
+        (child_dir.name, child_dir)
+        for child_dir in child_dirs
+        if not is_role_container_dir(child_dir) and contains_volume_files(child_dir)
+    ]
+
+    if task_dirs:
+        return task_dirs
+
+    if contains_volume_files(data_root):
+        return [(data_root.name, data_root)]
+
+    return []
+
+
 def find_task_root(data_root: Path, task_names: Sequence[str]) -> Tuple[Path, List[Tuple[str, Path]]]:
     tasks = existing_task_dirs(data_root, task_names)
     if tasks:
@@ -384,6 +414,18 @@ def find_task_root(data_root: Path, task_names: Sequence[str]) -> Tuple[Path, Li
     candidates: List[Tuple[Path, List[Tuple[str, Path]]]] = []
     for child_dir in child_dirs:
         child_tasks = existing_task_dirs(child_dir, task_names)
+        if child_tasks:
+            candidates.append((child_dir, child_tasks))
+
+    if len(candidates) == 1:
+        return candidates[0]
+
+    tasks = inferred_task_dirs(data_root)
+    if tasks:
+        return data_root, tasks
+
+    for child_dir in child_dirs:
+        child_tasks = inferred_task_dirs(child_dir)
         if child_tasks:
             candidates.append((child_dir, child_tasks))
 
@@ -443,13 +485,15 @@ def main() -> int:
     data_root = resolve_data_root(args)
     subject_regex = re.compile(args.subject_regex) if args.subject_regex else None
 
-    data_root, tasks = find_task_root(data_root, args.tasks)
-    if not tasks and args.task_name:
+    if args.task_name:
         task_dir = maybe_copy_into_named_task_dir(data_root, args.task_name)
         tasks = [(args.task_name, task_dir)]
+    else:
+        data_root, tasks = find_task_root(data_root, args.tasks)
 
     if not tasks:
-        print(f"No task folders found under {data_root}. Expected one of: {', '.join(args.tasks)}")
+        print(f"No task folders with volume files found under {data_root}.")
+        print(f"First tried known task names: {', '.join(args.tasks)}")
         print("If this is a single-task dataset, pass --task-name TASK_NAME.")
         return 2
 

@@ -34,14 +34,25 @@ For a tar archive:
 python prepare_dataset_csv.py /path/to/dataset.tar.gz --extract-to /path/to/dataset --overwrite
 ```
 
-The script expects task folders such as `Abdominal`, `Brain`, `Cardiac`, `Hippocampus`, and `Hip`.
-It scans NIfTI-like volumes, treats paths containing words such as `label`, `seg`, `mask`, or `gt` as labels,
+The script first looks for task folders such as `Abdominal`, `Brain`, `Cardiac`, `Hippocampus`, and `Hip`.
+If those names are not present, it can infer task folders from any immediate subdirectory that contains
+NIfTI-like volumes. It treats paths containing words such as `label`, `seg`, `mask`, or `gt` as labels,
 matches each image/label case by filename stem, and writes relative paths into each task's CSV files.
+
+If your dataset root itself is a single task with folders like `images/` and `labels/`, provide the task name:
+
+```
+python prepare_dataset_csv.py /path/to/dataset --task-name Abdominal --overwrite
+```
+
 If your filenames use a special subject ID pattern, pass `--subject-regex`, for example:
 
 ```
 python prepare_dataset_csv.py /path/to/dataset --subject-regex "case_([0-9]+)" --overwrite
 ```
+
+After CSV generation, make sure `train.py`/`dataset.py` use the same task folder names that exist under
+`data_root`.
 
 ## 🏋️ Training
 1) Edit `train.py` to set:
