@@ -214,7 +214,7 @@ def main():
     )
     train_loader = train_dataset.get_dataloader(batch_size=batch_size)
 
-    model = PromptReg(task_total_number=5)
+    model = PromptReg(inshape=target_size, task_total_number=train_dataset.task_num)
     model.to(device)
 
     mind_loss = MIND_loss(device)
