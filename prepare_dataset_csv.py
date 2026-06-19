@@ -33,6 +33,19 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 DEFAULT_TASKS = ("Abdominal", "Brain", "Cardiac", "Hippocampus", "Hip")
 VOLUME_EXTENSIONS = (".nii.gz", ".nii", ".mha", ".mhd", ".nrrd", ".mgz")
+REQUIRED_CSV_COLUMNS = ("moving_image", "moving_label", "fixed_image", "fixed_label")
+LABEL_COLUMNS = ("moving_label", "fixed_label")
+IMAGE_LABEL_COLUMN_PAIRS = (
+    ("moving_image", "moving_label"),
+    ("fixed_image", "fixed_label"),
+)
+EXPECTED_LABEL_COUNTS = {
+    "Abdominal": 5,
+    "Brain": 36,
+    "Hippocampus": 3,
+    "Cardiac": 4,
+    "Hip": 4,
+}
 
 LABEL_MARKERS = {
     "annotation",
@@ -158,6 +171,17 @@ def parse_args() -> argparse.Namespace:
         "--validate-only",
         action="store_true",
         help="Only validate existing csv/train.csv and csv/test.csv paths; do not regenerate CSV files.",
+    )
+    parser.add_argument(
+        "--validate-load",
+        action="store_true",
+        help="With --validate-only, load each referenced volume with MedPy and check dimensions.",
+    )
+    parser.add_argument(
+        "--max-validate-rows",
+        type=int,
+        default=None,
+        help="Validate at most this many rows per CSV file. Defaults to all rows.",
     )
     return parser.parse_args()
 
@@ -407,6 +431,11 @@ def pair_paths(pair: Pair) -> Tuple[str, str, str, str]:
     return (pair.moving_image, pair.moving_label, pair.fixed_image, pair.fixed_label)
 
 
+def is_safe_relative_path(relative_path: str) -> bool:
+    path = Path(relative_path)
+    return not path.is_absolute() and ".." not in path.parts and relative_path.strip() == relative_path
+
+
 def filter_existing_pairs(task_dir: Path, pairs: Sequence[Pair]) -> Tuple[List[Pair], List[Tuple[Pair, str]]]:
     valid_pairs: List[Pair] = []
     skipped_pairs: List[Tuple[Pair, str]] = []
@@ -428,40 +457,171 @@ def filter_existing_pairs(task_dir: Path, pairs: Sequence[Pair]) -> Tuple[List[P
     return valid_pairs, skipped_pairs
 
 
-def validate_csv_file(task_dir: Path, csv_path: Path) -> int:
+def load_medical_volume(path: Path):
+    try:
+        from medpy.io import load
+    except ImportError as exc:
+        raise RuntimeError("MedPy is required for --validate-load. Install it with: pip install medpy") from exc
+
+    data, _ = load(str(path))
+    return data
+
+
+def validate_loaded_row(
+    task_name: str,
+    task_dir: Path,
+    csv_path: Path,
+    row_number: int,
+    row: Dict[str, str],
+    cache: Dict[Path, object],
+) -> Tuple[int, int]:
+    errors = 0
+    warnings = 0
+
+    def get_volume(relative_path: str):
+        full_path = (task_dir / relative_path).resolve()
+        if full_path not in cache:
+            cache[full_path] = load_medical_volume(full_path)
+        return cache[full_path]
+
+    loaded = {}
+    for column in REQUIRED_CSV_COLUMNS:
+        try:
+            loaded[column] = get_volume(row[column])
+        except Exception as exc:
+            print(f"{csv_path}:{row_number}: cannot load {column}={row[column]}: {exc}")
+            errors += 1
+
+    if errors:
+        return errors, warnings
+
+    for column, data in loaded.items():
+        ndim = getattr(data, "ndim", None)
+        if ndim != 3:
+            print(f"{csv_path}:{row_number}: {column} should be 3D, got shape {getattr(data, 'shape', None)}")
+            errors += 1
+
+    for image_column, label_column in IMAGE_LABEL_COLUMN_PAIRS:
+        image_shape = getattr(loaded[image_column], "shape", None)
+        label_shape = getattr(loaded[label_column], "shape", None)
+        if image_shape != label_shape:
+            print(
+                f"{csv_path}:{row_number}: {image_column} shape {image_shape} "
+                f"does not match {label_column} shape {label_shape}"
+            )
+            errors += 1
+
+    expected_label_count = EXPECTED_LABEL_COUNTS.get(task_name)
+    if expected_label_count is not None:
+        for label_column in LABEL_COLUMNS:
+            label = loaded[label_column]
+            unique_values = np.unique(label)
+            if not np.all(np.isin(unique_values, np.arange(expected_label_count))):
+                preview = unique_values[:20]
+                print(
+                    f"Warning: {csv_path}:{row_number}: {label_column} has values outside "
+                    f"0..{expected_label_count - 1}, first values: {preview}"
+                )
+                warnings += 1
+
+    return errors, warnings
+
+
+def validate_csv_file(
+    task_name: str,
+    task_dir: Path,
+    csv_path: Path,
+    validate_load: bool,
+    max_rows: Optional[int],
+) -> int:
     if not csv_path.exists():
         print(f"Missing CSV: {csv_path}")
         return 1
 
-    missing_count = 0
+    issue_count = 0
+    warning_count = 0
+    row_count = 0
+    load_cache: Dict[Path, object] = {}
     with csv_path.open(newline="") as handle:
         reader = csv.DictReader(handle)
-        required_columns = ("moving_image", "moving_label", "fixed_image", "fixed_label")
-        missing_columns = [column for column in required_columns if column not in (reader.fieldnames or [])]
+        missing_columns = [column for column in REQUIRED_CSV_COLUMNS if column not in (reader.fieldnames or [])]
         if missing_columns:
             print(f"{csv_path}: missing column(s): {', '.join(missing_columns)}")
             return 1
 
         for row_number, row in enumerate(reader, start=2):
-            for column in required_columns:
+            if max_rows is not None and row_count >= max_rows:
+                break
+            row_count += 1
+
+            row_has_path_issue = False
+            for column in REQUIRED_CSV_COLUMNS:
                 relative_path = row[column]
+                if not relative_path:
+                    print(f"{csv_path}:{row_number}: empty {column}")
+                    issue_count += 1
+                    row_has_path_issue = True
+                    continue
+                if not is_safe_relative_path(relative_path):
+                    print(f"{csv_path}:{row_number}: {column} must be a safe relative path: {relative_path}")
+                    issue_count += 1
+                    row_has_path_issue = True
+                    continue
+                if volume_suffix(Path(relative_path)) is None:
+                    print(f"{csv_path}:{row_number}: {column} is not a supported volume file: {relative_path}")
+                    issue_count += 1
+                    row_has_path_issue = True
+                    continue
+                if is_ignored_volume_file(Path(relative_path)):
+                    print(f"{csv_path}:{row_number}: {column} points to ignored macOS metadata file: {relative_path}")
+                    issue_count += 1
+                    row_has_path_issue = True
+                    continue
+
                 full_path = task_dir / relative_path
                 if not full_path.exists():
-                    if missing_count < 10:
+                    if issue_count < 10:
                         print(f"{csv_path}:{row_number}: missing {column}: {full_path}")
-                    missing_count += 1
+                    issue_count += 1
+                    row_has_path_issue = True
 
-    if missing_count:
-        print(f"{csv_path}: {missing_count} missing path reference(s)")
+            if validate_load and not row_has_path_issue:
+                load_errors, load_warnings = validate_loaded_row(
+                    task_name=task_name,
+                    task_dir=task_dir,
+                    csv_path=csv_path,
+                    row_number=row_number,
+                    row=row,
+                    cache=load_cache,
+                )
+                issue_count += load_errors
+                warning_count += load_warnings
+
+    if row_count == 0:
+        print(f"{csv_path}: no data rows")
+        issue_count += 1
+
+    if issue_count:
+        print(f"{csv_path}: {issue_count} issue(s)")
     else:
-        print(f"{csv_path}: OK")
+        message = f"{csv_path}: OK ({row_count} row(s) checked"
+        if validate_load:
+            message += ", volumes loaded"
+        if warning_count:
+            message += f", {warning_count} warning(s)"
+        message += ")"
+        print(message)
 
-    return missing_count
+    return issue_count
 
 
-def validate_task_csvs(task_dir: Path) -> int:
+def validate_task_csvs(task_name: str, task_dir: Path, validate_load: bool, max_rows: Optional[int]) -> int:
     csv_dir = task_dir / "csv"
-    return validate_csv_file(task_dir, csv_dir / "train.csv") + validate_csv_file(task_dir, csv_dir / "test.csv")
+    return validate_csv_file(
+        task_name, task_dir, csv_dir / "train.csv", validate_load, max_rows
+    ) + validate_csv_file(
+        task_name, task_dir, csv_dir / "test.csv", validate_load, max_rows
+    )
 
 
 def existing_task_dirs(data_root: Path, task_names: Iterable[str]) -> List[Tuple[str, Path]]:
@@ -599,9 +759,14 @@ def main() -> int:
         missing_references = 0
         for task_name, task_dir in tasks:
             print(f"{task_name}: validating {task_dir}")
-            missing_references += validate_task_csvs(task_dir)
+            missing_references += validate_task_csvs(
+                task_name=task_name,
+                task_dir=task_dir,
+                validate_load=args.validate_load,
+                max_rows=args.max_validate_rows,
+            )
         if missing_references:
-            print(f"Validation failed: {missing_references} missing path reference(s).")
+            print(f"Validation failed: {missing_references} issue(s).")
             return 1
         print("Validation passed.")
         return 0

@@ -22,6 +22,12 @@ Set `data_root` in `train.py`. Each task folder needs `csv/train.csv` and `csv/t
 - `moving_image`, `moving_label`
 - `fixed_image`, `fixed_label`
 
+The CSV files are manifests only. They do not contain image data; each value must be a safe relative path
+from the task folder to a loadable 3D medical volume (`.nii.gz`, `.nii`, `.mha`, `.mhd`, `.nrrd`, or `.mgz`).
+For each row, `moving_image` should match `moving_label` shape, and `fixed_image` should match
+`fixed_label` shape. Empty CSV files, absolute paths, `..` paths, missing files, and macOS `._*` metadata
+files are invalid.
+
 You can generate these CSV files from an extracted dataset folder or a tar archive:
 
 ```
@@ -76,10 +82,16 @@ To check whether generated CSV files point to files that actually exist, run:
 python3 prepare_dataset_csv.py /path/to/dataset --validate-only
 ```
 
+To also load the referenced volumes with MedPy and check that image/label shapes are compatible:
+
+```
+python3 prepare_dataset_csv.py /path/to/dataset --validate-only --validate-load
+```
+
 For one task folder:
 
 ```
-python3 prepare_dataset_csv.py /path/to/dataset/Cardiac --task-name Cardiac --validate-only
+python3 prepare_dataset_csv.py /path/to/dataset/Cardiac --task-name Cardiac --validate-only --validate-load
 ```
 
 ## 🏋️ Training
