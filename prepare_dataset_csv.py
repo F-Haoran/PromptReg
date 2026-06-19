@@ -154,6 +154,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Print what would be written without creating CSV files.",
     )
+    parser.add_argument(
+        "--validate-only",
+        action="store_true",
+        help="Only validate existing csv/train.csv and csv/test.csv paths; do not regenerate CSV files.",
+    )
     return parser.parse_args()
 
 
@@ -197,6 +202,10 @@ def strip_volume_suffix(path: Path) -> str:
     if suffix is None:
         return path.stem
     return name[: -len(suffix)]
+
+
+def is_ignored_volume_file(path: Path) -> bool:
+    return path.name.startswith("._")
 
 
 def split_tokens(value: str) -> List[str]:
@@ -291,7 +300,7 @@ def collect_cases(
     warnings: List[str] = []
 
     for path in sorted(task_dir.rglob("*")):
-        if not path.is_file() or volume_suffix(path) is None:
+        if not path.is_file() or volume_suffix(path) is None or is_ignored_volume_file(path):
             continue
 
         relative_path = path.relative_to(task_dir)
@@ -392,6 +401,67 @@ def write_csv(path: Path, pairs: Sequence[Pair], overwrite: bool) -> None:
         writer.writeheader()
         for pair in pairs:
             writer.writerow(pair.__dict__)
+
+
+def pair_paths(pair: Pair) -> Tuple[str, str, str, str]:
+    return (pair.moving_image, pair.moving_label, pair.fixed_image, pair.fixed_label)
+
+
+def filter_existing_pairs(task_dir: Path, pairs: Sequence[Pair]) -> Tuple[List[Pair], List[Tuple[Pair, str]]]:
+    valid_pairs: List[Pair] = []
+    skipped_pairs: List[Tuple[Pair, str]] = []
+
+    for pair in pairs:
+        missing_path = next(
+            (
+                relative_path
+                for relative_path in pair_paths(pair)
+                if not (task_dir / relative_path).exists()
+            ),
+            None,
+        )
+        if missing_path is None:
+            valid_pairs.append(pair)
+        else:
+            skipped_pairs.append((pair, missing_path))
+
+    return valid_pairs, skipped_pairs
+
+
+def validate_csv_file(task_dir: Path, csv_path: Path) -> int:
+    if not csv_path.exists():
+        print(f"Missing CSV: {csv_path}")
+        return 1
+
+    missing_count = 0
+    with csv_path.open(newline="") as handle:
+        reader = csv.DictReader(handle)
+        required_columns = ("moving_image", "moving_label", "fixed_image", "fixed_label")
+        missing_columns = [column for column in required_columns if column not in (reader.fieldnames or [])]
+        if missing_columns:
+            print(f"{csv_path}: missing column(s): {', '.join(missing_columns)}")
+            return 1
+
+        for row_number, row in enumerate(reader, start=2):
+            for column in required_columns:
+                relative_path = row[column]
+                full_path = task_dir / relative_path
+                if not full_path.exists():
+                    if missing_count < 10:
+                        print(f"{csv_path}:{row_number}: missing {column}: {full_path}")
+                    missing_count += 1
+
+    if missing_count:
+        print(f"{csv_path}: {missing_count} missing path reference(s)")
+    else:
+        print(f"{csv_path}: OK")
+
+    return missing_count
+
+
+def validate_task_csvs(task_dir: Path) -> int:
+    csv_dir = task_dir / "csv"
+    return validate_csv_file(task_dir, csv_dir / "train.csv") + validate_csv_file(task_dir, csv_dir / "test.csv")
 
 
 def existing_task_dirs(data_root: Path, task_names: Iterable[str]) -> List[Tuple[str, Path]]:
@@ -525,6 +595,17 @@ def main() -> int:
         print("If this is a single-task dataset, pass --task-name TASK_NAME.")
         return 2
 
+    if args.validate_only:
+        missing_references = 0
+        for task_name, task_dir in tasks:
+            print(f"{task_name}: validating {task_dir}")
+            missing_references += validate_task_csvs(task_dir)
+        if missing_references:
+            print(f"Validation failed: {missing_references} missing path reference(s).")
+            return 1
+        print("Validation passed.")
+        return 0
+
     total_pairs = 0
     for task_name, task_dir in tasks:
         cases, warnings = collect_cases(task_dir, subject_regex)
@@ -532,9 +613,14 @@ def main() -> int:
             print(f"Warning: {warning}", file=sys.stderr)
 
         pairs = make_pairs(cases, args.pairing, args.bidirectional)
+        pairs, skipped_pairs = filter_existing_pairs(task_dir, pairs)
         print_summary(task_name, task_dir, cases, pairs)
+        if skipped_pairs:
+            print(f"  skipped {len(skipped_pairs)} pair(s) with missing files")
+            for pair, missing_path in skipped_pairs[:5]:
+                print(f"    missing {missing_path} from pair {pair}")
 
-        if len(cases) < 2:
+        if len(pairs) == 0:
             print(f"Warning: {task_name} needs at least 2 matched cases to create registration pairs.")
             continue
 

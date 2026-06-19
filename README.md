@@ -70,6 +70,18 @@ embedded role prefixes (`img0001`, `mask0001`, `label0001`, etc.) to the same ca
 After CSV generation, make sure `train.py`/`dataset.py` use the same task folder names that exist under
 `data_root`.
 
+To check whether generated CSV files point to files that actually exist, run:
+
+```
+python3 prepare_dataset_csv.py /path/to/dataset --validate-only
+```
+
+For one task folder:
+
+```
+python3 prepare_dataset_csv.py /path/to/dataset/Cardiac --task-name Cardiac --validate-only
+```
+
 ## 🏋️ Training
 1) Edit `train.py` to set:
 - `data_root`: dataset root directory
