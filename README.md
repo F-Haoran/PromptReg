@@ -27,6 +27,8 @@ from the task folder to a loadable 3D medical volume (`.nii.gz`, `.nii`, `.mha`,
 For each row, `moving_image` should match `moving_label` shape, and `fixed_image` should match
 `fixed_label` shape. Empty CSV files, absolute paths, `..` paths, missing files, and macOS `._*` metadata
 files are invalid.
+Some datasets, such as BraTS, store multiple modalities in one 4D NIfTI. The loader selects the first
+volume from a small modality/time axis so the model still receives a 3D volume.
 
 You can generate these CSV files from an extracted dataset folder or a tar archive:
 

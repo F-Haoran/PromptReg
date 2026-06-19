@@ -5,9 +5,32 @@ from torch.utils.data import Dataset
 from medpy.io import load, save
 import pandas as pd
 
+def select_3d_volume(data, file_path, volume_index=0):
+    data = np.asarray(data)
+    data = np.squeeze(data)
+
+    if data.ndim == 3:
+        return data
+
+    if data.ndim == 4:
+        candidate_axes = [axis for axis, size in enumerate(data.shape) if size <= 8]
+        if not candidate_axes:
+            raise ValueError(
+                f"{file_path} is 4D with shape {data.shape}, but no small modality/time axis was found."
+            )
+
+        axis = candidate_axes[0]
+        if volume_index >= data.shape[axis]:
+            raise ValueError(
+                f"volume_index={volume_index} is out of range for {file_path} with shape {data.shape}."
+            )
+        return np.take(data, volume_index, axis=axis)
+
+    raise ValueError(f"{file_path} should be a 3D volume, got shape {data.shape}.")
+
 def load_nifti(file_path):
     data, header = load(file_path)
-    return data
+    return select_3d_volume(data, file_path)
 
 class BaseDataset(Dataset):
     def __init__(self, data_path, split='train', transform=None):

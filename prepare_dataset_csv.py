@@ -30,6 +30,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
+import numpy as np
+
 
 DEFAULT_TASKS = ("Abdominal", "Brain", "Cardiac", "Hippocampus", "Hip")
 VOLUME_EXTENSIONS = (".nii.gz", ".nii", ".mha", ".mhd", ".nrrd", ".mgz")
@@ -457,6 +459,28 @@ def filter_existing_pairs(task_dir: Path, pairs: Sequence[Pair]) -> Tuple[List[P
     return valid_pairs, skipped_pairs
 
 
+def select_3d_volume(data, path: Path, volume_index: int = 0):
+    data = np.asarray(data)
+    data = np.squeeze(data)
+
+    if data.ndim == 3:
+        return data
+
+    if data.ndim == 4:
+        candidate_axes = [axis for axis, size in enumerate(data.shape) if size <= 8]
+        if not candidate_axes:
+            raise ValueError(
+                f"{path} is 4D with shape {data.shape}, but no small modality/time axis was found."
+            )
+
+        axis = candidate_axes[0]
+        if volume_index >= data.shape[axis]:
+            raise ValueError(f"volume_index={volume_index} is out of range for {path} with shape {data.shape}.")
+        return np.take(data, volume_index, axis=axis)
+
+    raise ValueError(f"{path} should be a 3D volume, got shape {data.shape}.")
+
+
 def load_medical_volume(path: Path):
     try:
         from medpy.io import load
@@ -464,7 +488,7 @@ def load_medical_volume(path: Path):
         raise RuntimeError("MedPy is required for --validate-load. Install it with: pip install medpy") from exc
 
     data, _ = load(str(path))
-    return data
+    return select_3d_volume(data, path)
 
 
 def validate_loaded_row(
