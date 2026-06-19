@@ -210,16 +210,6 @@ def main():
         exclude_tasks=args.exclude_tasks
     )
     train_loader = train_dataset.get_dataloader(batch_size=batch_size)
-    
-   
-    test_datasets = {
-        'Abdominal': ABDODataset(os.path.join(data_root, 'ABDO'), split='test'),
-        'Brain': BrainDataset(os.path.join(data_root, 'Brain'), split='test'),
-        'Hippocampus': HaimaDataset(os.path.join(data_root, 'Haima'), split='test'),
-        'Cardiac': HeartDataset(os.path.join(data_root, 'Heart'), split='test'),
-        'Hip': HipDataset(os.path.join(data_root, 'Hip'), split='test')
-    }
-    
 
     model = PromptReg(task_total_number=5)
     model.to(device)
