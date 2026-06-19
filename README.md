@@ -63,6 +63,10 @@ If your filenames use a special subject ID pattern, pass `--subject-regex`, for 
 python prepare_dataset_csv.py /path/to/dataset --subject-regex "case_([0-9]+)" --overwrite
 ```
 
+If you see warnings such as `images without labels` for names like `img0001_tcia` and
+`labels without images` for names like `mask0001_tcia`, update to the latest script. It normalizes
+embedded role prefixes (`img0001`, `mask0001`, `label0001`, etc.) to the same case key.
+
 After CSV generation, make sure `train.py`/`dataset.py` use the same task folder names that exist under
 `data_root`.
 

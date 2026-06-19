@@ -213,9 +213,37 @@ def path_tokens(path: Path) -> List[str]:
     return tokens
 
 
+def strip_embedded_role_prefix(token: str) -> str:
+    """Normalize tokens like img0001 and mask0001 to the shared key 0001."""
+    for marker in sorted(ALL_ROLE_MARKERS, key=len, reverse=True):
+        if not token.startswith(marker):
+            continue
+
+        remainder = token[len(marker):]
+        if remainder and any(char.isdigit() for char in remainder):
+            return remainder
+
+    return token
+
+
+def token_has_role_marker(token: str, markers: Iterable[str]) -> bool:
+    if token in markers:
+        return True
+
+    for marker in sorted(markers, key=len, reverse=True):
+        if not token.startswith(marker):
+            continue
+
+        remainder = token[len(marker):]
+        if remainder and any(char.isdigit() for char in remainder):
+            return True
+
+    return False
+
+
 def is_label_path(relative_path: Path) -> bool:
     tokens = path_tokens(relative_path)
-    return any(token in LABEL_MARKERS for token in tokens)
+    return any(token_has_role_marker(token, LABEL_MARKERS) for token in tokens)
 
 
 def case_key(relative_path: Path, subject_regex: Optional[re.Pattern[str]]) -> str:
@@ -228,7 +256,7 @@ def case_key(relative_path: Path, subject_regex: Optional[re.Pattern[str]]) -> s
             return match.group(0).lower()
 
     stem = strip_volume_suffix(relative_path).lower()
-    tokens = split_tokens(stem)
+    tokens = [strip_embedded_role_prefix(token) for token in split_tokens(stem)]
     filtered = [token for token in tokens if token not in ALL_ROLE_MARKERS]
     if filtered:
         return "_".join(filtered)
