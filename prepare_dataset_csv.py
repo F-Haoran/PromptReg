@@ -487,7 +487,24 @@ def load_medical_volume(path: Path):
     except ImportError as exc:
         raise RuntimeError("MedPy is required for --validate-load. Install it with: pip install medpy") from exc
 
-    data, _ = load(str(path))
+    try:
+        data, _ = load(str(path))
+    except Exception as medpy_error:
+        try:
+            import nibabel as nib
+        except ImportError as exc:
+            raise RuntimeError(
+                f"MedPy/SimpleITK failed to load {path}: {medpy_error}. "
+                "Install nibabel to enable fallback loading: pip install nibabel"
+            ) from exc
+
+        try:
+            data = np.asarray(nib.load(str(path)).dataobj)
+        except Exception as nib_error:
+            raise RuntimeError(
+                f"Both MedPy/SimpleITK and nibabel failed to load {path}. "
+                f"MedPy error: {medpy_error}. nibabel error: {nib_error}"
+            ) from nib_error
     return select_3d_volume(data, path)
 
 

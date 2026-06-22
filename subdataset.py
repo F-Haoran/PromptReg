@@ -29,7 +29,24 @@ def select_3d_volume(data, file_path, volume_index=0):
     raise ValueError(f"{file_path} should be a 3D volume, got shape {data.shape}.")
 
 def load_nifti(file_path):
-    data, header = load(file_path)
+    try:
+        data, header = load(file_path)
+    except Exception as medpy_error:
+        try:
+            import nibabel as nib
+        except ImportError as exc:
+            raise RuntimeError(
+                f"MedPy/SimpleITK failed to load {file_path}: {medpy_error}. "
+                "Install nibabel to enable fallback loading: pip install nibabel"
+            ) from exc
+
+        try:
+            data = np.asarray(nib.load(file_path).dataobj)
+        except Exception as nib_error:
+            raise RuntimeError(
+                f"Both MedPy/SimpleITK and nibabel failed to load {file_path}. "
+                f"MedPy error: {medpy_error}. nibabel error: {nib_error}"
+            ) from nib_error
     return select_3d_volume(data, file_path)
 
 class BaseDataset(Dataset):

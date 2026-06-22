@@ -29,6 +29,8 @@ For each row, `moving_image` should match `moving_label` shape, and `fixed_image
 files are invalid.
 Some datasets, such as BraTS, store multiple modalities in one 4D NIfTI. The loader selects the first
 volume from the smallest non-spatial-looking modality/time axis so the model still receives a 3D volume.
+If SimpleITK/MedPy rejects a NIfTI header, for example due to non-orthonormal direction cosines, the loader
+can fall back to nibabel. Install it with `pip install nibabel` if needed.
 
 You can generate these CSV files from an extracted dataset folder or a tar archive:
 
