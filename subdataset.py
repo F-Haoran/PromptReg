@@ -5,9 +5,49 @@ from torch.utils.data import Dataset
 from medpy.io import load, save
 import pandas as pd
 
+def select_3d_volume(data, file_path, volume_index=0):
+    data = np.asarray(data)
+    data = np.squeeze(data)
+
+    if data.ndim == 3:
+        return data
+
+    if data.ndim == 4:
+        candidate_axes = [axis for axis, size in enumerate(data.shape) if size < max(data.shape)]
+        if not candidate_axes:
+            raise ValueError(
+                f"{file_path} is 4D with shape {data.shape}, but no modality/time axis was found."
+            )
+
+        axis = min(candidate_axes, key=lambda candidate_axis: data.shape[candidate_axis])
+        if volume_index >= data.shape[axis]:
+            raise ValueError(
+                f"volume_index={volume_index} is out of range for {file_path} with shape {data.shape}."
+            )
+        return np.take(data, volume_index, axis=axis)
+
+    raise ValueError(f"{file_path} should be a 3D volume, got shape {data.shape}.")
+
 def load_nifti(file_path):
-    data, header = load(file_path)
-    return data
+    try:
+        data, header = load(file_path)
+    except Exception as medpy_error:
+        try:
+            import nibabel as nib
+        except ImportError as exc:
+            raise RuntimeError(
+                f"MedPy/SimpleITK failed to load {file_path}: {medpy_error}. "
+                "Install nibabel to enable fallback loading: pip install nibabel"
+            ) from exc
+
+        try:
+            data = np.asarray(nib.load(file_path).dataobj)
+        except Exception as nib_error:
+            raise RuntimeError(
+                f"Both MedPy/SimpleITK and nibabel failed to load {file_path}. "
+                f"MedPy error: {medpy_error}. nibabel error: {nib_error}"
+            ) from nib_error
+    return select_3d_volume(data, file_path)
 
 class BaseDataset(Dataset):
     def __init__(self, data_path, split='train', transform=None):

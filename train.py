@@ -181,6 +181,9 @@ def parse_args():
                       help='Initial learning rate')
     parser.add_argument('--seed', type=int, default=42,
                       help='Random seed for reproducibility')
+    parser.add_argument('--target-size', type=int, nargs=3, default=(160, 160, 160),
+                      metavar=('H', 'W', 'D'),
+                      help='Resampled volume size used for training')
     return parser.parse_args()
 def main():
 
@@ -193,7 +196,7 @@ def main():
     
   
     data_root = '/path/to/dataset'
-    target_size = (160, 160, 160)
+    target_size = tuple(args.target_size)
     batch_size = args.batch_size
     num_epochs = args.epochs
     initial_lr = args.lr
@@ -210,18 +213,8 @@ def main():
         exclude_tasks=args.exclude_tasks
     )
     train_loader = train_dataset.get_dataloader(batch_size=batch_size)
-    
-   
-    test_datasets = {
-        'Abdominal': ABDODataset(os.path.join(data_root, 'ABDO'), split='test'),
-        'Brain': BrainDataset(os.path.join(data_root, 'Brain'), split='test'),
-        'Hippocampus': HaimaDataset(os.path.join(data_root, 'Haima'), split='test'),
-        'Cardiac': HeartDataset(os.path.join(data_root, 'Heart'), split='test'),
-        'Hip': HipDataset(os.path.join(data_root, 'Hip'), split='test')
-    }
-    
 
-    model = PromptReg(task_total_number=5)
+    model = PromptReg(inshape=target_size, task_total_number=train_dataset.task_num)
     model.to(device)
 
     mind_loss = MIND_loss(device)
