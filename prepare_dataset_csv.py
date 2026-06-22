@@ -467,13 +467,13 @@ def select_3d_volume(data, path: Path, volume_index: int = 0):
         return data
 
     if data.ndim == 4:
-        candidate_axes = [axis for axis, size in enumerate(data.shape) if size <= 8]
+        candidate_axes = [axis for axis, size in enumerate(data.shape) if size < max(data.shape)]
         if not candidate_axes:
             raise ValueError(
-                f"{path} is 4D with shape {data.shape}, but no small modality/time axis was found."
+                f"{path} is 4D with shape {data.shape}, but no modality/time axis was found."
             )
 
-        axis = candidate_axes[0]
+        axis = min(candidate_axes, key=lambda candidate_axis: data.shape[candidate_axis])
         if volume_index >= data.shape[axis]:
             raise ValueError(f"volume_index={volume_index} is out of range for {path} with shape {data.shape}.")
         return np.take(data, volume_index, axis=axis)
