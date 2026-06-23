@@ -16,6 +16,7 @@ More details can be found in our [paper](https://link.springer.com/chapter/10.10
 - `dataset.py` — Multi-task dataset wrapper and task-id remapping.
 - `subdataset.py` — Per-task loading, normalization, label checks.
 - `prepare_csv_paths.py` — CSV path checker/rewriter for moved data roots.
+- `denoise_nifti.py` — Single-image NIfTI denoising without a fixed/reference image.
 - `PromptReg.py` — PromptReg Model.
 
 ## 🧰 Data Preparation
@@ -59,6 +60,27 @@ python3 -m venv .venv
 Run commands through the virtual environment:
 ```
 .venv/bin/python train.py --help
+```
+
+## 🧹 Single Image Denoising
+PromptReg checkpoints are registration weights: inference requires both a moving image and a
+fixed/reference image. If you only have one noisy image and an output path, use the standalone
+filtering script instead:
+```
+python denoise_nifti.py \
+  --input /path/to/noisy_image.nii.gz \
+  --output /path/to/denoised_image.nii.gz \
+  --method gaussian \
+  --sigma 1.0
+```
+
+For salt-and-pepper style noise, median filtering can be useful:
+```
+python denoise_nifti.py \
+  --input /path/to/noisy_image.nii.gz \
+  --output /path/to/denoised_image.nii.gz \
+  --method median \
+  --size 3
 ```
 
 ## 🏋️ Training
