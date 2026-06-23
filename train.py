@@ -11,8 +11,11 @@ import argparse
 import random
 from PromptReg import PromptReg
 from dataset import MultiTaskRegistrationDataset
+from subdataset import AbdominalDataset, BrainDataset, CardiacDataset, HippocampusDataset, HipDataset
 import torch.nn.functional as nnf
 
+
+DEFAULT_DATA_ROOT = '/home/FrankFei/PromptReg'
 
 
 class SpatialTransformer(nn.Module):
@@ -169,6 +172,10 @@ def set_seed(seed=42):
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Training script for multi-task registration')
+    parser.add_argument('--data-root', default=os.environ.get('PROMPTREG_DATA_ROOT', DEFAULT_DATA_ROOT),
+                      help='Root directory containing task data folders')
+    parser.add_argument('--save-dir', default=os.environ.get('PROMPTREG_SAVE_DIR'),
+                      help='Directory to store checkpoints; defaults to <data-root>/checkpoints')
     parser.add_argument('--exclude-tasks', nargs='+', default=['Abdominal'], 
                       help='Tasks to exclude from training')
     parser.add_argument('--gpu', type=str, default='0',
@@ -192,13 +199,13 @@ def main():
 
     
   
-    data_root = '/path/to/dataset'
+    data_root = os.path.abspath(os.path.expanduser(args.data_root))
     target_size = (160, 160, 160)
     batch_size = args.batch_size
     num_epochs = args.epochs
     initial_lr = args.lr
 
-    save_dir = '/path/to/save/checkpoints'
+    save_dir = os.path.abspath(os.path.expanduser(args.save_dir or os.path.join(data_root, 'checkpoints')))
    
     os.makedirs(save_dir, exist_ok=True)
     
@@ -213,10 +220,10 @@ def main():
     
    
     test_datasets = {
-        'Abdominal': ABDODataset(os.path.join(data_root, 'ABDO'), split='test'),
+        'Abdominal': AbdominalDataset(os.path.join(data_root, 'Abdominal'), split='test'),
         'Brain': BrainDataset(os.path.join(data_root, 'Brain'), split='test'),
-        'Hippocampus': HaimaDataset(os.path.join(data_root, 'Haima'), split='test'),
-        'Cardiac': HeartDataset(os.path.join(data_root, 'Heart'), split='test'),
+        'Hippocampus': HippocampusDataset(os.path.join(data_root, 'Hippocampus'), split='test'),
+        'Cardiac': CardiacDataset(os.path.join(data_root, 'Cardiac'), split='test'),
         'Hip': HipDataset(os.path.join(data_root, 'Hip'), split='test')
     }
     

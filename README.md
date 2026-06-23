@@ -12,24 +12,49 @@ More details can be found in our [paper](https://link.springer.com/chapter/10.10
 
 
 ## 📁 Repository Structure
-- `train.py` — Main training script (set `data_root` and `save_dir`).
+- `train.py` — Main training script (defaults to `/home/FrankFei/PromptReg` for `data_root`).
 - `dataset.py` — Multi-task dataset wrapper and task-id remapping.
 - `subdataset.py` — Per-task loading, normalization, label checks.
+- `prepare_csv_paths.py` — CSV path checker/rewriter for moved data roots.
 - `PromptReg.py` — PromptReg Model.
 
 ## 🧰 Data Preparation
-Set `data_root` in `train.py`. Each task folder needs `csv/train.csv` and `csv/test.csv` with columns:
+The default `data_root` is `/home/FrankFei/PromptReg`. Override it with `--data-root` or the
+`PROMPTREG_DATA_ROOT` environment variable if needed. Each task folder needs `csv/train.csv`
+and `csv/test.csv` with columns:
 - `moving_image`, `moving_label`
 - `fixed_image`, `fixed_label`
 
+Expected task folders:
+```
+/home/FrankFei/PromptReg/
+  Abdominal/
+  Brain/
+  Cardiac/
+  Hippocampus/
+  Hip/
+```
+
+CSV path values should be relative to their task folder. If existing CSVs still contain old
+absolute paths, check them with:
+```
+python prepare_csv_paths.py --data-root /home/FrankFei/PromptReg
+```
+
+Rewrite old absolute entries to relative paths after reviewing the dry-run output:
+```
+python prepare_csv_paths.py --data-root /home/FrankFei/PromptReg --write
+```
+
 ## 🏋️ Training
-1) Edit `train.py` to set:
-- `data_root`: dataset root directory
-- `save_dir`: directory to store checkpoints (auto-save every 30 epochs)
+1) Set paths if you do not want the defaults:
+- `--data-root`: dataset root directory (default: `/home/FrankFei/PromptReg`)
+- `--save-dir`: directory to store checkpoints (default: `<data-root>/checkpoints`)
 
 2) Run:
 ```
 python train.py \
+  --data-root /home/FrankFei/PromptReg \
   --gpu 0 \
   --batch-size 1 \
   --epochs 300 \
