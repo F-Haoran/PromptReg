@@ -46,6 +46,21 @@ Rewrite old absolute entries to relative paths after reviewing the dry-run outpu
 python prepare_csv_paths.py --data-root /home/FrankFei/PromptReg --write
 ```
 
+## ⚙️ Environment Setup
+On Ubuntu with Python 3.12:
+```
+sudo apt-get update
+sudo apt-get install -y python3.12-venv
+python3 -m venv .venv
+.venv/bin/python -m pip install --upgrade pip
+.venv/bin/python -m pip install -r requirements.txt
+```
+
+Run commands through the virtual environment:
+```
+.venv/bin/python train.py --help
+```
+
 ## 🏋️ Training
 1) Set paths if you do not want the defaults:
 - `--data-root`: dataset root directory (default: `/home/FrankFei/PromptReg`)
