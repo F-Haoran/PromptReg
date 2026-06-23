@@ -1,17 +1,25 @@
 #!/usr/bin/env python3
 import argparse
+from pathlib import Path
 
 import numpy as np
 from medpy.io import load, save
 from scipy.ndimage import gaussian_filter, median_filter
 
 
+SUPPORTED_EXTENSIONS = ('.nii', '.nii.gz', '.mha', '.mhd')
+
+
 def parse_args():
     parser = argparse.ArgumentParser(
-        description='Denoise a single NIfTI image without a fixed/reference image.'
+        description='Denoise medical images without a fixed/reference image.'
     )
-    parser.add_argument('--input', required=True, help='Noisy input NIfTI path')
-    parser.add_argument('--output', required=True, help='Output denoised NIfTI path')
+    input_group = parser.add_mutually_exclusive_group(required=True)
+    input_group.add_argument('--input', help='Noisy input image path')
+    input_group.add_argument('--input-folder', help='Folder containing noisy images')
+    output_group = parser.add_mutually_exclusive_group(required=True)
+    output_group.add_argument('--output', help='Output denoised image path')
+    output_group.add_argument('--output-folder', help='Folder for denoised images')
     parser.add_argument('--method', choices=('gaussian', 'median'), default='gaussian',
                         help='Denoising method to apply')
     parser.add_argument('--sigma', type=float, default=1.0,
@@ -22,6 +30,8 @@ def parse_args():
                         help='Optionally clip intensities before denoising, for example 1 99')
     parser.add_argument('--preserve-dtype', action='store_true',
                         help='Cast output back to the input dtype before saving')
+    parser.add_argument('--recursive', action='store_true',
+                        help='Process input folders recursively')
     return parser.parse_args()
 
 
@@ -59,10 +69,25 @@ def denoise_array(data, method='gaussian', sigma=1.0, size=3, clip_percentiles_v
     raise ValueError(f'Unsupported denoising method: {method}')
 
 
-def main():
-    args = parse_args()
+def has_supported_extension(path):
+    path_name = path.name.lower()
+    return any(path_name.endswith(extension) for extension in SUPPORTED_EXTENSIONS)
 
-    data, header = load(args.input)
+
+def iter_input_files(input_folder, recursive=False):
+    pattern = '**/*' if recursive else '*'
+    for path in sorted(input_folder.glob(pattern)):
+        if path.is_file() and has_supported_extension(path):
+            yield path
+
+
+def output_path_for(input_path, input_folder, output_folder):
+    relative_path = input_path.relative_to(input_folder)
+    return output_folder / relative_path
+
+
+def denoise_file(input_path, output_path, args):
+    data, header = load(str(input_path))
     input_dtype = data.dtype
     denoised = denoise_array(
         data=data,
@@ -75,8 +100,54 @@ def main():
     if args.preserve_dtype:
         denoised = cast_like_input(denoised, input_dtype)
 
-    save(denoised, args.output, header, force=True)
-    print(f'Saved denoised image to {args.output}')
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    save(denoised, str(output_path), header, force=True)
+    print(f'Saved denoised image to {output_path}')
+
+
+def validate_args(args):
+    if args.sigma < 0:
+        raise ValueError('--sigma must be non-negative')
+    if args.size < 1:
+        raise ValueError('--size must be at least 1')
+    if args.input_folder and args.output:
+        raise ValueError('--output cannot be used with --input-folder; use --output-folder')
+    if args.input:
+        input_path = Path(args.input)
+        if not input_path.is_file():
+            raise ValueError(f'Input file does not exist: {input_path}')
+        if not has_supported_extension(input_path):
+            raise ValueError(f'Unsupported input file extension: {input_path}')
+    if args.input_folder:
+        input_folder = Path(args.input_folder)
+        if not input_folder.is_dir():
+            raise ValueError(f'Input folder does not exist: {input_folder}')
+
+
+def main():
+    args = parse_args()
+    validate_args(args)
+
+    if args.input:
+        input_path = Path(args.input)
+        output_path = Path(args.output) if args.output else Path(args.output_folder) / input_path.name
+        denoise_file(input_path, output_path, args)
+        return
+
+    input_folder = Path(args.input_folder)
+    output_folder = Path(args.output_folder)
+    input_files = list(iter_input_files(input_folder, recursive=args.recursive))
+    if not input_files:
+        raise ValueError(f'No supported image files found in {input_folder}')
+
+    for input_path in input_files:
+        denoise_file(
+            input_path=input_path,
+            output_path=output_path_for(input_path, input_folder, output_folder),
+            args=args,
+        )
+
+    print(f'Processed {len(input_files)} image(s).')
 
 
 if __name__ == '__main__':

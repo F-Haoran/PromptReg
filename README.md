@@ -62,16 +62,35 @@ Run commands through the virtual environment:
 .venv/bin/python train.py --help
 ```
 
-## 🧹 Single Image Denoising
+## 🧹 Image Denoising
 PromptReg checkpoints are registration weights: inference requires both a moving image and a
 fixed/reference image. If you only have one noisy image and an output path, use the standalone
-filtering script instead:
+filtering script instead. Supported file types include `.nii`, `.nii.gz`, `.mha`, and `.mhd`.
+
+Single file:
 ```
 python denoise_nifti.py \
   --input /path/to/noisy_image.nii.gz \
   --output /path/to/denoised_image.nii.gz \
   --method gaussian \
   --sigma 1.0
+```
+
+Folder input/output:
+```
+python denoise_nifti.py \
+  --input-folder /path/to/noisy_images \
+  --output-folder /path/to/denoised_images \
+  --method gaussian \
+  --sigma 1.0
+```
+
+Add `--recursive` to process nested folders while preserving their relative paths:
+```
+python denoise_nifti.py \
+  --input-folder /path/to/noisy_images \
+  --output-folder /path/to/denoised_images \
+  --recursive
 ```
 
 For salt-and-pepper style noise, median filtering can be useful:
