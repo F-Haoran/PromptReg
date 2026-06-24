@@ -16,7 +16,8 @@ More details can be found in our [paper](https://link.springer.com/chapter/10.10
 - `dataset.py` — Multi-task dataset wrapper and task-id remapping.
 - `subdataset.py` — Per-task loading, normalization, label checks.
 - `prepare_csv_paths.py` — CSV path checker/rewriter for moved data roots.
-- `denoise_nifti.py` — Single-image NIfTI denoising without a fixed/reference image.
+- `create_dataset_splits.py` — Generate `csv/train.csv` and `csv/test.csv` with a test split.
+- `denoise_nifti.py` — File/folder medical image denoising without a fixed/reference image.
 - `PromptReg.py` — PromptReg Model.
 
 ## 🧰 Data Preparation
@@ -46,6 +47,29 @@ Rewrite old absolute entries to relative paths after reviewing the dry-run outpu
 ```
 python prepare_csv_paths.py --data-root /home/FrankFei/PromptReg --write
 ```
+
+If the task folders do not already have separate `csv/train.csv` and `csv/test.csv` files,
+generate them with an approximate 70/30 split:
+```
+python create_dataset_splits.py \
+  --data-root /home/FrankFei/PromptReg \
+  --test-fraction 0.3
+```
+
+After checking the dry-run output, write the CSVs:
+```
+python create_dataset_splits.py \
+  --data-root /home/FrankFei/PromptReg \
+  --test-fraction 0.3 \
+  --write \
+  --overwrite
+```
+
+The split script first tries to split an existing pair CSV (`csv/all.csv`, `csv/pairs.csv`,
+`csv/dataset.csv`, or a lone `csv/train.csv`). If no source CSV exists, it scans each task
+folder for image/label files (`.nii`, `.nii.gz`, `.mha`, `.mhd`) and creates moving/fixed pairs
+from matched cases. Image and label files must have matching case names, such as
+`images/case001.nii.gz` and `labels/case001_label.nii.gz`.
 
 ## ⚙️ Environment Setup
 On Ubuntu with Python 3.12:
