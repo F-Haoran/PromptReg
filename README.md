@@ -18,6 +18,7 @@ More details can be found in our [paper](https://link.springer.com/chapter/10.10
 - `prepare_csv_paths.py` — CSV path checker/rewriter for moved data roots.
 - `create_dataset_splits.py` — Generate `csv/train.csv` and `csv/test.csv` with a test split.
 - `denoise_nifti.py` — File/folder medical image denoising without a fixed/reference image.
+- `test.py` — Evaluate a trained checkpoint on `csv/test.csv`.
 - `PromptReg.py` — PromptReg Model.
 
 ## 🧰 Data Preparation
@@ -124,6 +125,23 @@ python denoise_nifti.py \
   --output /path/to/denoised_image.nii.gz \
   --method median \
   --size 3
+```
+
+## 🧪 Testing
+Evaluate a trained checkpoint on each task's `csv/test.csv`:
+```
+python test.py \
+  --data-root /home/FrankFei/PromptReg \
+  --checkpoint /home/FrankFei/PromptReg/checkpoints/epoch_300.pth \
+  --gpu 0
+```
+
+Test only selected tasks:
+```
+python test.py \
+  --data-root /home/FrankFei/PromptReg \
+  --checkpoint /home/FrankFei/PromptReg/checkpoints/epoch_300.pth \
+  --tasks Brain Cardiac
 ```
 
 ## 🏋️ Training
