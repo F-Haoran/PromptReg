@@ -10,16 +10,49 @@ def load_nifti(file_path):
     return data
 
 class BaseDataset(Dataset):
+    REQUIRED_COLUMNS = ('moving_image', 'moving_label', 'fixed_image', 'fixed_label')
+    TASK_ALIASES = {
+        'Abdominal': ('Abdominal', 'ABDO'),
+        'Brain': ('Brain',),
+        'Cardiac': ('Cardiac', 'Heart'),
+        'Hippocampus': ('Hippocampus', 'Haima'),
+        'Hip': ('Hip',)
+    }
+
     def __init__(self, data_path, split='train', transform=None):
-        self.data_path = data_path
+        self.data_path = os.path.abspath(os.path.expanduser(data_path))
         self.split = split
         self.transform = transform
         
-        csv_path = os.path.join(data_path, 'csv', f'{split}.csv')
+        csv_path = os.path.join(self.data_path, 'csv', f'{split}.csv')
         self.data_pairs = pd.read_csv(csv_path)
+        missing_columns = [column for column in self.REQUIRED_COLUMNS if column not in self.data_pairs.columns]
+        if missing_columns:
+            raise ValueError(f"{csv_path} is missing required columns: {missing_columns}")
+
+    def _resolve_path(self, file_path):
+        file_path = str(file_path)
+        if not os.path.isabs(file_path):
+            return os.path.join(self.data_path, file_path)
+
+        if os.path.exists(file_path):
+            return file_path
+
+        task_name = os.path.basename(os.path.normpath(self.data_path))
+        aliases = self.TASK_ALIASES.get(task_name, (task_name,))
+        path_parts = os.path.normpath(file_path).split(os.sep)
+        for alias in aliases:
+            if alias not in path_parts:
+                continue
+            alias_index = len(path_parts) - 1 - path_parts[::-1].index(alias)
+            suffix = path_parts[alias_index + 1:]
+            if suffix:
+                return os.path.join(self.data_path, *suffix)
+
+        return file_path
     
     def _load_nifti(self, file_path):
-        return load_nifti(os.path.join(self.data_path, file_path))
+        return load_nifti(self._resolve_path(file_path))
     
     def __len__(self):
         return len(self.data_pairs)
