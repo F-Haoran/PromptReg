@@ -128,12 +128,23 @@ python denoise_nifti.py \
 ```
 
 ## 🧪 Testing
-Evaluate a trained checkpoint on each task's `csv/test.csv`:
+Evaluate a trained checkpoint on each task's `csv/test.csv`. The script infers
+`target_size` and `task_total_number` from the checkpoint by default:
 ```
 python test.py \
   --data-root /home/FrankFei/PromptReg \
   --checkpoint /home/FrankFei/PromptReg/checkpoints/epoch_300.pth \
   --gpu 0
+```
+
+If your checkpoint was trained with different settings, override them explicitly:
+```
+python test.py \
+  --data-root /home/FrankFei/PromptReg \
+  --checkpoint /home/FrankFei/PromptReg/Outcomes/epoch_300.pth \
+  --target-size 64 64 64 \
+  --task-total-number 4 \
+  --exclude-tasks Abdominal
 ```
 
 Test only selected tasks:
